@@ -1,0 +1,213 @@
+local Plugin = {}
+local H = {}
+
+local Path = require("plenary.path")
+
+local plugin_folder = "spear.nvim"
+H.nvim_data_path = Path:new(string.format("%s/%s", vim.fn.stdpath("data"), plugin_folder))
+
+Plugin.setup = function()
+	if not H.nvim_data_path:exists() then
+		H.nvim_data_path:mkdir()
+	end
+
+	H.create_autocmds()
+
+	Plugin.data = H.load_data()
+end
+
+Plugin.add = function()
+	local buffer_name = vim.api.nvim_buf_get_name(vim.api.nvim_get_current_buf())
+	buffer_name = H.get_buffer_name(buffer_name)
+
+	-- Do not add file to list if it's already in the list
+	if H.list_contains_file(buffer_name) then
+		return
+	end
+
+	local bufnr = vim.fn.bufnr(buffer_name)
+
+	local cursor_pos = { row = 1, col = 0 }
+	if bufnr ~= -1 then
+		local pos = vim.api.nvim_win_get_cursor(0)
+		cursor_pos.row = pos[1]
+		cursor_pos.col = pos[2]
+	end
+
+	local list_item = {
+		name = buffer_name,
+		position = {
+			row = cursor_pos.row,
+			col = cursor_pos.col,
+		},
+	}
+
+	table.insert(H.get_current_list(), list_item)
+end
+
+Plugin.select = function(index)
+	-- Don't do anything if the file list does not contain that file
+	if index > #H.get_current_list() then
+		return
+	end
+
+	local list_item = H.get_current_list()[index]
+	local bufnr = vim.fn.bufnr(list_item.name)
+
+	local needs_to_create_buffer = bufnr == -1
+	if needs_to_create_buffer then
+		bufnr = vim.fn.bufadd(list_item.name)
+	end
+
+	if not vim.api.nvim_buf_is_loaded(bufnr) then
+		vim.fn.bufload(bufnr)
+		vim.api.nvim_set_option_value("buflisted", true, { buf = bufnr })
+	end
+
+	vim.api.nvim_set_current_buf(bufnr)
+
+	if needs_to_create_buffer then
+		vim.api.nvim_win_set_cursor(0, {
+			list_item.position.row,
+			list_item.position.col,
+		})
+	end
+	vim.cmd.normal({ "zz", bang = true })
+end
+
+Plugin.create = function()
+	vim.ui.input({ prompt = "Name of new list: " }, function(input)
+		if not input or input == "" then
+			return
+		end
+
+		Plugin.data.current_list = input
+		Plugin.data.lists[input] = {}
+	end)
+end
+
+Plugin.switch = function()
+	local items = vim.tbl_keys(Plugin.data.lists)
+	local picker_name = "Current List: " .. Plugin.data.current_list
+	MiniPick.start({
+		source = {
+			name = picker_name,
+			items = items,
+			choose = function(item)
+				Plugin.data.current_list = item
+				local notification_msg = string.format("Switched to %s list", item)
+				vim.notify(notification_msg, vim.log.levels.INFO)
+			end,
+		},
+	})
+end
+
+Plugin.rename = function()
+	local prompt = string.format("Rename %s to: ", Plugin.data.current_list)
+	vim.ui.input({ prompt = prompt }, function(input)
+		Plugin.data.lists[input] = H.get_current_list()
+		Plugin.data.lists[Plugin.data.current_list] = nil
+		Plugin.data.current_list = input
+	end)
+end
+
+Plugin.debug = function()
+	vim.print(vim.inspect(Plugin.data))
+end
+
+H.get_current_list = function()
+	local current_list = Plugin.data.current_list
+	return Plugin.data.lists[current_list]
+end
+
+H.create_autocmds = function()
+	local augroup = vim.api.nvim_create_augroup("DVT Harpoon", {})
+	vim.api.nvim_create_autocmd("BufLeave", {
+		group = augroup,
+		pattern = "*",
+		callback = function(event)
+			local bufnr = event.buf
+			local bufname = H.get_buffer_name(vim.api.nvim_buf_get_name(bufnr))
+			local item = H.get_item_by_name(bufname)
+
+			if item then
+				local pos = vim.api.nvim_win_get_cursor(0)
+
+				item.position.row = pos[1]
+				item.position.col = pos[2]
+			end
+		end,
+	})
+	vim.api.nvim_create_autocmd("VimLeavePre", {
+		group = augroup,
+		pattern = "*",
+		callback = function()
+			H.save_data()
+		end,
+	})
+end
+
+H.path_to_project_list = function()
+	---@diagnostic disable-next-line: param-type-mismatch
+	local filename = vim.fn.sha256(vim.uv.cwd())
+	return string.format("%s/%s.json", H.nvim_data_path, filename)
+end
+
+H.get_buffer_name = function(buffer_name)
+	return Path:new(buffer_name):make_relative(vim.uv.cwd())
+end
+
+H.list_contains_file = function(buffer_name)
+	for i = 1, #H.get_current_list() do
+		local item = H.get_current_list()[i]
+		if item.name == buffer_name then
+			return true
+		end
+	end
+	return false
+end
+
+H.get_item_by_name = function(buffer_name)
+	for i = 1, #H.get_current_list() do
+		local list_item = H.get_current_list()[i]
+		if list_item.name == buffer_name then
+			return list_item, i
+		end
+	end
+	return nil, nil
+end
+
+H.write_data = function(list)
+	local path_to_project_file = Path:new(H.path_to_project_list())
+	local json_encoded_list = vim.json.encode(list)
+	path_to_project_file:write(json_encoded_list, "w")
+end
+
+H.load_data = function()
+	local path_to_project_list = Path:new(H.path_to_project_list())
+	if not path_to_project_list:exists() then
+		H.write_data(H.initial_data)
+	end
+
+	local file_data = path_to_project_list:read()
+
+	if not file_data or file_data == "" then
+		H.write_data(H.initial_data)
+		file_data = vim.json.encode(H.initial_data)
+	end
+
+	return vim.json.decode(file_data)
+end
+
+H.save_data = function()
+	H.write_data(Plugin.data)
+end
+
+H.initial_data = {
+	current_list = "Default List",
+	lists = {
+		["Default List"] = {},
+	},
+}
+
+return Plugin
