@@ -1,3 +1,26 @@
+---@diagnostic disable: missing-fields
+
+---@class CursorPosition
+---@field row number
+---@field col number
+
+---@class SpearList
+---@field name string
+---@field position CursorPosition
+
+---@class SpearData
+---@field current_list string
+---@field lists SpearList[]
+
+---@class Spear
+---@field data SpearData
+---@field setup fun()
+---@field add fun()
+---@field select fun(index:number)
+---@field create fun()
+---@field switch fun()
+---@field rename fun()
+---@field debug fun()
 local Plugin = {}
 local H = {}
 
@@ -45,6 +68,7 @@ Plugin.add = function()
 	table.insert(H.get_current_list(), list_item)
 end
 
+---@param index number
 Plugin.select = function(index)
 	-- Don't do anything if the file list does not contain that file
 	if index > #H.get_current_list() then
@@ -113,6 +137,7 @@ Plugin.debug = function()
 	vim.print(vim.inspect(Plugin.data))
 end
 
+---@return SpearList
 H.get_current_list = function()
 	local current_list = Plugin.data.current_list
 	return Plugin.data.lists[current_list]
@@ -145,16 +170,22 @@ H.create_autocmds = function()
 	})
 end
 
+---@return string path The path to the current project json
 H.path_to_project_list = function()
 	---@diagnostic disable-next-line: param-type-mismatch
 	local filename = vim.fn.sha256(vim.uv.cwd())
 	return string.format("%s/%s.json", H.nvim_data_path, filename)
 end
 
+---@param buffer_name string The path of the file of the buffer
+---@return string path The relative path name to the file of the buffer
 H.get_buffer_name = function(buffer_name)
 	return Path:new(buffer_name):make_relative(vim.uv.cwd())
 end
 
+---Checks if the current project list contains a file
+---@param buffer_name string The buffer file name to look for
+---@return boolean
 H.list_contains_file = function(buffer_name)
 	for i = 1, #H.get_current_list() do
 		local item = H.get_current_list()[i]
@@ -165,6 +196,10 @@ H.list_contains_file = function(buffer_name)
 	return false
 end
 
+---Gets a [list item](lua://SpearList) based on the buffer file name
+---@param buffer_name string
+---@return SpearList?
+---@return number?
 H.get_item_by_name = function(buffer_name)
 	for i = 1, #H.get_current_list() do
 		local list_item = H.get_current_list()[i]
@@ -175,12 +210,16 @@ H.get_item_by_name = function(buffer_name)
 	return nil, nil
 end
 
-H.write_data = function(list)
+---The [project data](lua://SpearData) to write to the project's JSON data file
+---@param data SpearData
+H.write_data = function(data)
 	local path_to_project_file = Path:new(H.path_to_project_list())
-	local json_encoded_list = vim.json.encode(list)
+	local json_encoded_list = vim.json.encode(data)
 	path_to_project_file:write(json_encoded_list, "w")
 end
 
+---Gets the [project data](lua://SpearData) for this project
+---@return SpearData
 H.load_data = function()
 	local path_to_project_list = Path:new(H.path_to_project_list())
 	if not path_to_project_list:exists() then
@@ -197,10 +236,13 @@ H.load_data = function()
 	return vim.json.decode(file_data)
 end
 
+---Writes the [project data](lua://SpearData) to the project JSON file
 H.save_data = function()
 	H.write_data(Plugin.data)
 end
 
+---Default initial data if there is none
+---@type SpearData
 H.initial_data = {
 	current_list = "Default List",
 	lists = {
