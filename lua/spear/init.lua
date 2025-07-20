@@ -89,17 +89,15 @@ end
 Plugin.switch = function()
 	local items = vim.tbl_keys(Plugin.data.lists)
 	local picker_name = "Current List: " .. Plugin.data.current_list
-	MiniPick.start({
-		source = {
-			name = picker_name,
-			items = items,
-			choose = function(item)
-				Plugin.data.current_list = item
-				local notification_msg = string.format("Switched to %s list", item)
-				vim.notify(notification_msg, vim.log.levels.INFO)
-			end,
-		},
-	})
+	vim.ui.select(items, { prompt = picker_name }, function(item)
+		if not item then
+			return
+		end
+
+		Plugin.data.current_list = item
+		local notification_msg = string.format("Switched to %s list", item)
+		vim.notify(notification_msg, vim.log.levels.INFO)
+	end)
 end
 
 Plugin.rename = function()
