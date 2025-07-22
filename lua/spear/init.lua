@@ -19,6 +19,7 @@
 ---@field data SpearData
 ---@field setup fun()
 ---@field add fun()
+---@field remove fun()
 ---@field select fun(index:number)
 ---@field create fun()
 ---@field switch fun()
@@ -69,6 +70,26 @@ Plugin.add = function()
 	}
 
 	table.insert(H.get_current_list(), list_item)
+end
+
+Plugin.remove = function()
+	if #H.get_current_list() == 0 then
+		return
+	end
+
+	vim.ui.select(H.get_current_list(), {
+		prompt = "Which file do you want to delete?",
+		format_item = function(item)
+			return item.name
+		end,
+	}, function(item)
+		if not item then
+			return
+		end
+
+		local _, i = H.get_item_by_name(item.name)
+		table.remove(H.get_current_list(), i)
+	end)
 end
 
 ---@param index number
