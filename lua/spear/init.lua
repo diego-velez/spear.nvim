@@ -4,13 +4,16 @@
 ---@field row number
 ---@field col number
 
----@class SpearList
+---@class SpearListEntry
 ---@field name string
 ---@field position CursorPosition
 
+---@class SpearList
+---@field [string] SpearListEntry[]
+
 ---@class SpearData
 ---@field current_list string
----@field lists SpearList[]
+---@field lists SpearList
 
 ---@class Spear
 ---@field data SpearData
@@ -141,7 +144,7 @@ Plugin.debug = function()
 	vim.print(vim.inspect(Plugin.data))
 end
 
----@return SpearList
+---@return SpearListEntry[]
 H.get_current_list = function()
 	local current_list = Plugin.data.current_list
 	return Plugin.data.lists[current_list]
@@ -200,9 +203,9 @@ H.list_contains_file = function(buffer_name)
 	return false
 end
 
----Gets a [list item](lua://SpearList) based on the buffer file name
+---Gets a [list item](lua://SpearListEntry) based on the buffer file name
 ---@param buffer_name string
----@return SpearList?
+---@return SpearListEntry?
 ---@return number?
 H.get_item_by_name = function(buffer_name)
 	for i = 1, #H.get_current_list() do
