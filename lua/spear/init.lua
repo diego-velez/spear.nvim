@@ -26,7 +26,7 @@
 ---@field switch fun()
 ---@field rename fun()
 ---@field debug fun()
-local Plugin = {}
+local Spear = {}
 local H = {}
 
 local Path = require("plenary.path")
@@ -34,17 +34,19 @@ local Path = require("plenary.path")
 local plugin_folder = "spear.nvim"
 H.nvim_data_path = Path:new(string.format("%s/%s", vim.fn.stdpath("data"), plugin_folder))
 
-Plugin.setup = function()
+Spear.setup = function()
+	_G.Spear = Spear
+
 	if not H.nvim_data_path:exists() then
 		H.nvim_data_path:mkdir()
 	end
 
 	H.create_autocmds()
 
-	Plugin.data = H.load_data()
+	Spear.data = H.load_data()
 end
 
-Plugin.add = function()
+Spear.add = function()
 	local buffer_name = vim.api.nvim_buf_get_name(vim.api.nvim_get_current_buf())
 	buffer_name = H.get_buffer_name(buffer_name)
 
@@ -73,7 +75,7 @@ Plugin.add = function()
 	table.insert(H.get_current_list(), list_item)
 end
 
-Plugin.remove = function()
+Spear.remove = function()
 	if #H.get_current_list() == 0 then
 		return
 	end
@@ -94,7 +96,7 @@ Plugin.remove = function()
 end
 
 ---@param index number
-Plugin.select = function(index)
+Spear.select = function(index)
 	-- Don't do anything if the file list does not contain that file
 	if index > #H.get_current_list() then
 		return
@@ -124,73 +126,73 @@ Plugin.select = function(index)
 	vim.cmd.normal({ "zz", bang = true })
 end
 
-Plugin.create = function()
+Spear.create = function()
 	vim.ui.input({ prompt = "Name of new list: " }, function(input)
 		if not input or input == "" then
 			return
 		end
 
-		Plugin.data.current_list = input
-		Plugin.data.lists[input] = {}
+		Spear.data.current_list = input
+		Spear.data.lists[input] = {}
 	end)
 end
 
-Plugin.delete = function()
-	if #Plugin.data.lists == 1 then
+Spear.delete = function()
+	if #Spear.data.lists == 1 then
 		return
 	end
 
-	local items = vim.tbl_keys(Plugin.data.lists)
+	local items = vim.tbl_keys(Spear.data.lists)
 	vim.ui.select(items, { prompt = "Which list would you like to delete?" }, function(list)
 		if not list then
 			return
 		end
 
 		-- Switch current list if we are going to delete it
-		if list == Plugin.data.current_list then
+		if list == Spear.data.current_list then
 			vim.notify("Cannot delete currently selected list", vim.log.levels.WARN)
 			return
 		end
 
-		Plugin.data.lists[list] = nil
+		Spear.data.lists[list] = nil
 	end)
 end
 
-Plugin.switch = function()
-	local items = vim.tbl_keys(Plugin.data.lists)
-	local picker_name = "Current List: " .. Plugin.data.current_list
+Spear.switch = function()
+	local items = vim.tbl_keys(Spear.data.lists)
+	local picker_name = "Current List: " .. Spear.data.current_list
 	vim.ui.select(items, { prompt = picker_name }, function(item)
 		if not item then
 			return
 		end
 
-		Plugin.data.current_list = item
+		Spear.data.current_list = item
 		local notification_msg = string.format("Switched to %s list", item)
 		vim.notify(notification_msg, vim.log.levels.INFO)
 	end)
 end
 
-Plugin.rename = function()
-	local prompt = string.format("Rename %s to: ", Plugin.data.current_list)
+Spear.rename = function()
+	local prompt = string.format("Rename %s to: ", Spear.data.current_list)
 	vim.ui.input({ prompt = prompt }, function(input)
 		if not input or input == "" then
 			return
 		end
 
-		Plugin.data.lists[input] = H.get_current_list()
-		Plugin.data.lists[Plugin.data.current_list] = nil
-		Plugin.data.current_list = input
+		Spear.data.lists[input] = H.get_current_list()
+		Spear.data.lists[Spear.data.current_list] = nil
+		Spear.data.current_list = input
 	end)
 end
 
-Plugin.debug = function()
-	vim.print(vim.inspect(Plugin.data))
+Spear.debug = function()
+	vim.print(vim.inspect(Spear.data))
 end
 
 ---@return SpearListEntry[]
 H.get_current_list = function()
-	local current_list = Plugin.data.current_list
-	return Plugin.data.lists[current_list]
+	local current_list = Spear.data.current_list
+	return Spear.data.lists[current_list]
 end
 
 H.create_autocmds = function()
@@ -288,7 +290,7 @@ end
 
 ---Writes the [project data](lua://SpearData) to the project JSON file
 H.save_data = function()
-	H.write_data(Plugin.data)
+	H.write_data(Spear.data)
 end
 
 ---Default initial data if there is none
@@ -300,4 +302,4 @@ H.initial_data = {
 	},
 }
 
-return Plugin
+return Spear
