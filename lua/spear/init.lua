@@ -127,6 +127,10 @@ end
 Plugin.rename = function()
 	local prompt = string.format("Rename %s to: ", Plugin.data.current_list)
 	vim.ui.input({ prompt = prompt }, function(input)
+		if not input or input == "" then
+			return
+		end
+
 		Plugin.data.lists[input] = H.get_current_list()
 		Plugin.data.lists[Plugin.data.current_list] = nil
 		Plugin.data.current_list = input
