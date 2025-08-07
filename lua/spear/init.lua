@@ -22,6 +22,7 @@
 ---@field remove fun()
 ---@field select fun(index:number)
 ---@field create fun()
+---@field delete fun()
 ---@field switch fun()
 ---@field rename fun()
 ---@field debug fun()
@@ -131,6 +132,27 @@ Plugin.create = function()
 
 		Plugin.data.current_list = input
 		Plugin.data.lists[input] = {}
+	end)
+end
+
+Plugin.delete = function()
+	if #Plugin.data.lists == 1 then
+		return
+	end
+
+	local items = vim.tbl_keys(Plugin.data.lists)
+	vim.ui.select(items, { prompt = "Which list would you like to delete?" }, function(list)
+		if not list then
+			return
+		end
+
+		-- Switch current list if we are going to delete it
+		if list == Plugin.data.current_list then
+			vim.notify("Cannot delete currently selected list", vim.log.levels.WARN)
+			return
+		end
+
+		Plugin.data.lists[list] = nil
 	end)
 end
 
