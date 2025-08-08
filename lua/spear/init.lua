@@ -47,85 +47,15 @@ Spear.setup = function()
 end
 
 Spear.add = function()
-	local buffer_name = vim.api.nvim_buf_get_name(vim.api.nvim_get_current_buf())
-	buffer_name = H.get_buffer_name(buffer_name)
-
-	-- Do not add file to list if it's already in the list
-	if H.list_contains_file(buffer_name) then
-		return
-	end
-
-	local bufnr = vim.fn.bufnr(buffer_name)
-
-	local cursor_pos = { row = 1, col = 0 }
-	if bufnr ~= -1 then
-		local pos = vim.api.nvim_win_get_cursor(0)
-		cursor_pos.row = pos[1]
-		cursor_pos.col = pos[2]
-	end
-
-	local list_item = {
-		name = buffer_name,
-		position = {
-			row = cursor_pos.row,
-			col = cursor_pos.col,
-		},
-	}
-
-	table.insert(H.get_current_list(), list_item)
-end
-
-Spear.remove = function()
-	if #H.get_current_list() == 0 then
-		return
-	end
-
-	vim.ui.select(H.get_current_list(), {
-		prompt = "Which file do you want to delete?",
-		format_item = function(item)
-			return item.name
-		end,
-	}, function(item)
-		if not item then
-			return
-		end
-
-		local _, i = H.get_item_by_name(item.name)
-		table.remove(H.get_current_list(), i)
-	end)
+	require("spear.list").add()
 end
 
 ---@param index number
 Spear.select = function(index)
-	-- Don't do anything if the file list does not contain that file
-	if index > #H.get_current_list() then
-		return
-	end
-
-	local list_item = H.get_current_list()[index]
-	local bufnr = vim.fn.bufnr(list_item.name)
-
-	local needs_to_create_buffer = bufnr == -1
-	if needs_to_create_buffer then
-		bufnr = vim.fn.bufadd(list_item.name)
-	end
-
-	if not vim.api.nvim_buf_is_loaded(bufnr) then
-		vim.fn.bufload(bufnr)
-		vim.api.nvim_set_option_value("buflisted", true, { buf = bufnr })
-	end
-
-	vim.api.nvim_set_current_buf(bufnr)
-
-	if needs_to_create_buffer then
-		vim.api.nvim_win_set_cursor(0, {
-			list_item.position.row,
-			list_item.position.col,
-		})
-	end
-	vim.cmd.normal({ "zz", bang = true })
+	require("spear.list").select(index)
 end
 
+---Create a new Spear list. Will prompt user for name.
 Spear.create = function()
 	vim.ui.input({ prompt = "Name of new list: " }, function(input)
 		if not input or input == "" then
@@ -137,12 +67,16 @@ Spear.create = function()
 	end)
 end
 
+---Deletes a Spear list. Will prompt the user to select which list to delete.
 Spear.delete = function()
 	if #Spear.data.lists == 1 then
 		return
 	end
 
 	local items = vim.tbl_keys(Spear.data.lists)
+	items = vim.tbl_filter(function(list)
+		return list ~= Spear.data.current_list
+	end, items)
 	vim.ui.select(items, { prompt = "Which list would you like to delete?" }, function(list)
 		if not list then
 			return
@@ -179,7 +113,7 @@ Spear.rename = function()
 			return
 		end
 
-		Spear.data.lists[input] = H.get_current_list()
+		Spear.data.lists[input] = Spear.get_current_list()
 		Spear.data.lists[Spear.data.current_list] = nil
 		Spear.data.current_list = input
 	end)
@@ -190,7 +124,7 @@ Spear.debug = function()
 end
 
 ---@return SpearListEntry[]
-H.get_current_list = function()
+Spear.get_current_list = function()
 	local current_list = Spear.data.current_list
 	return Spear.data.lists[current_list]
 end
@@ -202,7 +136,7 @@ H.create_autocmds = function()
 		pattern = "*",
 		callback = function(event)
 			local bufnr = event.buf
-			local bufname = H.get_buffer_name(vim.api.nvim_buf_get_name(bufnr))
+			local bufname = Spear.get_buffer_name(vim.api.nvim_buf_get_name(bufnr))
 			local item = H.get_item_by_name(bufname)
 
 			if item then
@@ -231,7 +165,7 @@ end
 
 ---@param buffer_name string The path of the file of the buffer
 ---@return string path The relative path name to the file of the buffer
-H.get_buffer_name = function(buffer_name)
+Spear.get_buffer_name = function(buffer_name)
 	return Path:new(buffer_name):make_relative(vim.uv.cwd())
 end
 
@@ -239,8 +173,8 @@ end
 ---@param buffer_name string The buffer file name to look for
 ---@return boolean
 H.list_contains_file = function(buffer_name)
-	for i = 1, #H.get_current_list() do
-		local item = H.get_current_list()[i]
+	for i = 1, #Spear.get_current_list() do
+		local item = Spear.get_current_list()[i]
 		if item.name == buffer_name then
 			return true
 		end
@@ -253,8 +187,8 @@ end
 ---@return SpearListEntry?
 ---@return number?
 H.get_item_by_name = function(buffer_name)
-	for i = 1, #H.get_current_list() do
-		local list_item = H.get_current_list()[i]
+	for i = 1, #Spear.get_current_list() do
+		local list_item = Spear.get_current_list()[i]
 		if list_item.name == buffer_name then
 			return list_item, i
 		end
